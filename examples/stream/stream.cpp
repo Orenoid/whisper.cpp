@@ -112,6 +112,40 @@ void whisper_print_usage(int /*argc*/, char ** argv, const whisper_params & para
     fprintf(stderr, "\n");
 }
 
+void list_audio_devices() {
+    fprintf(stderr, "\nInitializing audio system...\n");
+    
+    // Initialize SDL audio
+    if (SDL_Init(SDL_INIT_AUDIO) < 0) {
+        fprintf(stderr, "Failed to initialize SDL audio: %s\n", SDL_GetError());
+        return;
+    }
+    
+    fprintf(stderr, "Available audio capture devices:\n");
+    
+    // Get the number of available capture devices
+    int num_devices = SDL_GetNumAudioDevices(SDL_TRUE);  // SDL_TRUE for capture devices
+    
+    if (num_devices < 0) {
+        fprintf(stderr, "Couldn't detect any audio capture devices: %s\n", SDL_GetError());
+        return;
+    }
+    
+    if (num_devices == 0) {
+        fprintf(stderr, "No audio capture devices found\n");
+        return;
+    }
+    
+    // List all available devices
+    for (int i = 0; i < num_devices; i++) {
+        const char* device_name = SDL_GetAudioDeviceName(i, SDL_TRUE);
+        if (device_name) {
+            fprintf(stderr, "[%d] %s\n", i, device_name);
+        }
+    }
+    fprintf(stderr, "\n");
+}
+
 int main(int argc, char ** argv) {
     whisper_params params;
 
@@ -138,10 +172,28 @@ int main(int argc, char ** argv) {
     // init audio
 
     audio_async audio(params.length_ms);
+
+    // List available audio devices and let user choose
+    list_audio_devices();
+    
+    if (params.capture_id < 0) {
+        fprintf(stderr, "Please select an audio capture device [-1 for default]: ");
+        int selected_device;
+        if (scanf("%d", &selected_device) == 1) {
+            params.capture_id = selected_device;
+        }
+        fprintf(stderr, "\n");
+    }
+
+    // Initialize audio with selected device
     if (!audio.init(params.capture_id, WHISPER_SAMPLE_RATE)) {
         fprintf(stderr, "%s: audio.init() failed!\n", __func__);
+        SDL_Quit();  // Clean up SDL
         return 1;
     }
+
+    fprintf(stderr, "Audio capture device initialized successfully.\n");
+    fprintf(stderr, "Press Ctrl+C to stop recording...\n\n");
 
     audio.resume();
 
